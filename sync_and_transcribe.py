@@ -1,12 +1,11 @@
 import os
-import io
 from collections import defaultdict
 from datetime import datetime, timezone
 
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-from mistralai import Mistral
+from mistralai.client import Mistral
 
 load_dotenv()
 
@@ -34,7 +33,7 @@ def get_next_n(date_str: str) -> int:
 def transcribe(client: Mistral, audio_bytes: bytes, filename: str, language: str) -> str:
     response = client.audio.transcriptions.complete(
         model="voxtral-mini-latest",
-        file={"content": io.BytesIO(audio_bytes), "file_name": filename},
+        file={"content": audio_bytes, "file_name": filename},
         language=language,
     )
     return response.text.strip()
