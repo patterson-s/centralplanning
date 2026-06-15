@@ -1,0 +1,8 @@
+pyautogui==0.9.54
+pygetwindow==0.0.9
+pyperclip==1.8.2
+streamlit
+audio-recorder-streamlit
+psycopg2-binary
+mistralai
+python-dotenv
