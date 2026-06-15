@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 
 import psycopg2
 import psycopg2.extras
@@ -14,20 +15,9 @@ LANGUAGE_NAMES = {"en": "English", "fr": "French", "de": "German"}
 
 
 def get_next_n(date_str: str) -> int:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    prefix = f"transcript_{date_str}_"
-    existing = [
-        f for f in os.listdir(OUTPUT_DIR)
-        if f.startswith(prefix) and f.endswith(".md")
-    ]
-    numbers = []
-    for f in existing:
-        try:
-            n = int(f[len(prefix):-3])
-            numbers.append(n)
-        except ValueError:
-            pass
-    return max(numbers) + 1 if numbers else 1
+    Path(OUTPUT_DIR).mkdir(exist_ok=True)
+    nums = [int(p.stem.rsplit("_", 1)[-1]) for p in Path(OUTPUT_DIR).glob(f"transcript_{date_str}_*.md")]
+    return max(nums, default=0) + 1
 
 
 def transcribe(client: Mistral, audio_bytes: bytes, filename: str, language: str) -> str:
@@ -99,7 +89,6 @@ def main() -> None:
 
     print(f"Found {len(rows)} unprocessed recording(s).")
 
-    # Group: non-empty context_text → one file per unique context; empty → one file each
     groups: dict[str, list[dict]] = defaultdict(list)
     standalone: list[dict] = []
 
@@ -110,9 +99,10 @@ def main() -> None:
         else:
             standalone.append(dict(row))
 
+    all_groups = list(groups.items()) + [("", [r]) for r in standalone]
     all_processed_ids: list[int] = []
 
-    for ctx, group_rows in groups.items():
+    for ctx, group_rows in all_groups:
         for row in group_rows:
             print(f"  Transcribing {row['audio_filename']} ({row['language']})…")
             row["transcription"] = transcribe(
@@ -124,18 +114,6 @@ def main() -> None:
         filepath = write_transcript(group_rows, ctx)
         print(f"  → {filepath}")
         all_processed_ids.extend(r["id"] for r in group_rows)
-
-    for row in standalone:
-        print(f"  Transcribing {row['audio_filename']} ({row['language']})…")
-        row["transcription"] = transcribe(
-            client,
-            bytes(row["audio_data"]),
-            row["audio_filename"],
-            row["language"],
-        )
-        filepath = write_transcript([row], "")
-        print(f"  → {filepath}")
-        all_processed_ids.append(row["id"])
 
     if all_processed_ids:
         cur.execute(
